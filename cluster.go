@@ -1718,12 +1718,15 @@ func (c *Cluster) getTrustedPeers(ctx context.Context, exclude peer.ID) ([]peer.
 	return trustedPeers, nil
 }
 
-func setTrackerStatus(gpin *api.GlobalPinInfo, h cid.Cid, peers []peer.ID, status api.TrackerStatus, name string, t time.Time) {
+func setTrackerStatus(gpin *api.GlobalPinInfo, h cid.Cid, peers []peer.ID, pin api.Pin, status api.TrackerStatus, t time.Time) {
 	for _, p := range peers {
 		gpin.Add(&api.PinInfo{
-			Cid:  h,
-			Name: name,
-			Peer: p,
+			Cid:         h,
+			Name:        pin.Name,
+			Allocations: pin.Allocations,
+			Origins:     pin.Origins,
+			Metadata:    pin.Metadata,
+			Peer:        p,
 			PinInfoShort: api.PinInfoShort{
 				PeerName: p.String(),
 				Status:   status,
@@ -1771,8 +1774,8 @@ func (c *Cluster) globalPinInfoCid(ctx context.Context, comp, method string, h c
 			gpin,
 			h,
 			members,
+			*api.PinCid(h),
 			api.TrackerStatusUnpinned,
-			"",
 			timeNow,
 		)
 		return gpin, nil
@@ -1804,7 +1807,7 @@ func (c *Cluster) globalPinInfoCid(ctx context.Context, comp, method string, h c
 	}
 
 	// set status remote on un-allocated peers
-	setTrackerStatus(gpin, h, remote, api.TrackerStatusRemote, pin.Name, timeNow)
+	setTrackerStatus(gpin, h, remote, *pin, api.TrackerStatusRemote, timeNow)
 
 	lenDests := len(dests)
 	replies := make([]*api.PinInfo, lenDests)
@@ -1841,9 +1844,12 @@ func (c *Cluster) globalPinInfoCid(ctx context.Context, comp, method string, h c
 		// Deal with error cases (err != nil): wrap errors in PinInfo
 		logger.Errorf("%s: error in broadcast response from %s: %s ", c.id, dests[i], e)
 		gpin.Add(&api.PinInfo{
-			Cid:  h,
-			Name: pin.Name,
-			Peer: dests[i],
+			Cid:         h,
+			Name:        pin.Name,
+			Peer:        dests[i],
+			Allocations: pin.Allocations,
+			Origins:     pin.Origins,
+			Metadata:    pin.Metadata,
 			PinInfoShort: api.PinInfoShort{
 				PeerName: dests[i].String(),
 				Status:   api.TrackerStatusClusterError,
@@ -1930,9 +1936,12 @@ func (c *Cluster) globalPinInfoSlice(ctx context.Context, comp, method string, a
 	for p, msg := range erroredPeers {
 		for c := range fullMap {
 			setPinInfo(&api.PinInfo{
-				Cid:  c,
-				Name: "",
-				Peer: p,
+				Cid:         c,
+				Name:        "",
+				Peer:        p,
+				Allocations: nil,
+				Origins:     nil,
+				Metadata:    nil,
 				PinInfoShort: api.PinInfoShort{
 					Status: api.TrackerStatusClusterError,
 					TS:     time.Now(),
